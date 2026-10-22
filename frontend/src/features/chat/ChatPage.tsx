@@ -62,6 +62,17 @@ export function ChatPage({ state, dispatch, history }: Props) {
   const activeSessionId =
     serverSession && serverSession.conversationId === (state.conversation_id ?? "") ? serverSession.sessionId : null;
 
+  const clearAuthenticatedState = (showAuthModal: boolean) => {
+    removeAuthToken();
+    setUser(null);
+    setServerSessions([]);
+    setActiveServerSessionId(null);
+    setServerSession(null);
+    history.purgeServerCopies();
+    dispatch({ type: "NEW_CHAT" });
+    setAuthModalOpen(showAuthModal);
+  };
+
   // 기록 서버가 안 되어도 검색은 계속되도록 실패하면 null을 돌려준다(그 경우 기존처럼 FastAPI로 바로 보낸다).
   const ensureServerSession = async (firstQuestion: string): Promise<string | null> => {
     if (USE_MOCK || !user || !region || !getAuthToken()) return null;
@@ -75,26 +86,20 @@ export function ChatPage({ state, dispatch, history }: Props) {
       });
       setServerSession({ conversationId: state.conversation_id ?? "", sessionId: created.session_id });
       return created.session_id;
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiClientError && error.code === "UNAUTHORIZED") throw error;
       return null;
     }
   };
 
-  // 기록 서버 경로로 보냈다가 서버 쪽 사유로 거절되면 FastAPI 직접 호출로 한 번 더 보낸다(기록만 건너뛰고 검색은 계속된다).
-  // - UNAUTHORIZED: 로그인 토큰이 만료·거부됨 → 로그아웃 처리
-  // - SESSION_NOT_FOUND / FORBIDDEN: 기록 서버의 상담 세션을 쓸 수 없음 → 세션 연결을 끊고 다음 질문에서 새로 만든다
+  // 기록 서버 세션 오류만 FastAPI 직접 호출로 재시도한다. 인증 오류는 별도로 로그아웃 처리한다.
+  // SESSION_NOT_FOUND / FORBIDDEN이면 세션 연결을 끊고 다음 질문에서 새로 만든다.
   // 키 오류(API_KEY_REQUIRED, INVALID_API_KEY)나 한도 초과는 FastAPI가 준 오류이므로 그대로 보여 준다.
   const viaServer = async <T,>(run: () => Promise<T>, direct: () => Promise<T>): Promise<T> => {
     try {
       return await run();
     } catch (error) {
       if (error instanceof ApiClientError) {
-        if (error.code === "UNAUTHORIZED") {
-          removeAuthToken();
-          setUser(null);
-          setServerSession(null);
-          return direct();
-        }
         if (error.code === "SESSION_NOT_FOUND" || error.code === "FORBIDDEN") {
           setServerSession(null);
           return direct();
@@ -147,6 +152,10 @@ export function ChatPage({ state, dispatch, history }: Props) {
       refreshSessions();
     } catch (error) {
       const code = toErrorCode(error);
+      if (code === "UNAUTHORIZED") {
+        clearAuthenticatedState(true);
+        return;
+      }
       dispatch({ type: "RESOLVE", message: { id: uid(), type: "ai_error", code } });
       if (code === "API_KEY_REQUIRED") setKeyDialog({ open: true, reason: "required" });
       if (code === "INVALID_API_KEY") setKeyDialog({ open: true, reason: "invalid" });
@@ -170,13 +179,7 @@ export function ChatPage({ state, dispatch, history }: Props) {
   // 로그아웃: 서버(Oracle)에서 불러온 대화가 다음 사용자에게 보이지 않도록 화면과 브라우저의 복사본을 비운다.
   // 게스트가 직접 만든 상담 기록은 건드리지 않는다.
   const handleLogout = () => {
-    removeAuthToken();
-    setUser(null);
-    setServerSessions([]);
-    setActiveServerSessionId(null);
-    setServerSession(null);
-    history.purgeServerCopies();
-    dispatch({ type: "NEW_CHAT" });
+    clearAuthenticatedState(false);
   };
 
   const regionLabel = region ? [region.level1, region.level2].filter(Boolean).join(" ") : "";

@@ -8,8 +8,16 @@ import type { ConversationSummary } from "../storage/history";
 import { initialState, stateFromConversation } from "./conversation";
 import type { Action, ConversationState } from "./conversation";
 
+function purgeServerConversationCopies(): void {
+  for (const item of historyStore.list()) {
+    if (serverSessionIdOf(item.id)) historyStore.remove(item.id);
+  }
+}
+
 // 앱을 열 때: 마지막으로 보던 상담을 복원하고, 없으면 가장 최근 상담, 그것도 없으면 시작 화면.
 export function loadInitialState(): ConversationState {
+  // 이전 버전에서 브라우저에 남은 서버 상담 복사본을 게스트 화면에 노출하지 않는다.
+  purgeServerConversationCopies();
   const activeId = historyStore.getActiveId();
   const active = activeId ? historyStore.load(activeId) : null;
   if (active) return stateFromConversation(active);
@@ -44,8 +52,8 @@ export function useConversationHistory(state: ConversationState, dispatch: React
     if (!conversation_id || created_at === null || !region) return;
     if (messages === savedMessages.current) return;
     savedMessages.current = messages;
-    // 로그인 중에는 서버(Oracle)가 기준 저장소다. 브라우저에도 복사해 두면 로그아웃 뒤 다음 사용자에게 보이므로 저장하지 않는다.
-    if (getAuthToken()) return;
+    // 서버 상담은 Oracle이 기준 저장소다. 인증 만료 후에도 로컬 복사본으로 저장하지 않는다.
+    if (getAuthToken() || serverSessionIdOf(conversation_id)) return;
     if (!hasUserMessage(messages)) return; // 질문이 없는 상담은 기록하지 않는다
     const result = historyStore.save({
       id: conversation_id,
@@ -63,7 +71,9 @@ export function useConversationHistory(state: ConversationState, dispatch: React
 
   // 새로고침 뒤 마지막으로 보던 상담을 다시 열기 위해 현재 상담 id를 기억한다.
   useEffect(() => {
-    if (state.conversation_id && !getAuthToken()) historyStore.setActiveId(state.conversation_id);
+    if (state.conversation_id && !getAuthToken() && !serverSessionIdOf(state.conversation_id)) {
+      historyStore.setActiveId(state.conversation_id);
+    }
   }, [state.conversation_id]);
 
   // 다른 탭에서 기록이 바뀌면 목록을 다시 읽는다.
@@ -117,9 +127,7 @@ export function useConversationHistory(state: ConversationState, dispatch: React
   }, [state.pending, dispatch]);
 
   const purgeServerCopies = useCallback(() => {
-    for (const item of historyStore.list()) {
-      if (serverSessionIdOf(item.id)) historyStore.remove(item.id);
-    }
+    purgeServerConversationCopies();
     setItems(historyStore.list());
   }, []);
 
