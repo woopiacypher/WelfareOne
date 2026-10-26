@@ -16,8 +16,9 @@ import { ConversationList } from "./ConversationList";
 import { CurrentPolicyBar } from "./CurrentPolicyBar";
 import { MessageList } from "./MessageList";
 import { getAuthToken, getMe, removeAuthToken, UserProfile } from "../../api/auth";
-import { createServerSession, fetchServerSessions, fetchServerSessionDetail, ServerSessionSummary } from "../../api/history";
+import { createServerSession, deleteServerSession, fetchServerSessions, fetchServerSessionDetail, renameServerSession, ServerSessionSummary } from "../../api/history";
 import { CommonLoginModal } from "../portal/CommonLoginModal";
+import { ServerConversationList } from "./ServerConversationList";
 
 interface Props {
   state: ConversationState;
@@ -180,6 +181,21 @@ export function ChatPage({ state, dispatch, history }: Props) {
     }
   };
 
+  const handleRenameServerSession = async (sessionId: string, title: string) => {
+    await renameServerSession(sessionId, title.trim());
+    await fetchServerSessions().then(setServerSessions);
+  };
+
+  const handleDeleteServerSession = async (sessionId: string) => {
+    await deleteServerSession(sessionId);
+    setServerSessions((sessions) => sessions.filter((session) => session.session_id !== sessionId));
+    if (sessionId === activeServerSessionId) {
+      setActiveServerSessionId(null);
+      setServerSession(null);
+      dispatch({ type: "NEW_CHAT" });
+    }
+  };
+
   // 로그아웃: 서버(Oracle)에서 불러온 대화가 다음 사용자에게 보이지 않도록 화면과 브라우저의 복사본을 비운다.
   // 게스트가 직접 만든 상담 기록은 건드리지 않는다.
   const handleLogout = () => {
@@ -222,35 +238,14 @@ export function ChatPage({ state, dispatch, history }: Props) {
         {!user ? (
           <ConversationList history={history} disabled={pending} onSelected={() => setSidebarOpen(false)} />
         ) : (
-          <nav className="history" aria-label="클라우드 상담 기록">
-            <h2 className="history-heading">저장된 대화 기록 (Oracle DB)</h2>
-            {serverSessions.length === 0 ? (
-              <p className="muted history-empty">저장된 상담 기록이 없습니다.</p>
-            ) : (
-              <ul className="history-list">
-                {serverSessions.map((s) => {
-                  const active = s.session_id === activeServerSessionId;
-                  return (
-                    <li key={s.session_id} className={`history-item${active ? " active" : ""}`}>
-                      <button
-                        type="button"
-                        className="history-open"
-                        disabled={pending}
-                        title={s.title}
-                        onClick={() => handleSelectServerSession(s.session_id)}
-                      >
-                        <span className="history-title">{s.title}</span>
-                        <span className="history-meta">
-                          {s.region_level1} {s.region_level2}
-                          {s.age === null ? "" : ` · ${s.age}세`}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </nav>
+          <ServerConversationList
+            sessions={serverSessions}
+            activeId={activeServerSessionId}
+            disabled={pending}
+            onSelect={handleSelectServerSession}
+            onRename={handleRenameServerSession}
+            onDelete={handleDeleteServerSession}
+          />
         )}
 
         {/* 사이드바 하단: 비로그인(로그인/가입 버튼) vs 로그인(클라우드 보관 배너) */}
