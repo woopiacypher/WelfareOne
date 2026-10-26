@@ -92,7 +92,7 @@ cd frontend; npm install; npm run dev      # http://localhost:5173
 ```
 
 AI 호출에는 둘 중 하나가 필요하다.
-- 브라우저의 "API 키" 창에 본인 Gemini 키를 넣는다(요청 헤더 `X-Gemini-Api-Key`로 Spring→FastAPI에 전달됨).
+- 로그인 사용자는 브라우저의 "API 키" 창에서 저장하면 계정별 키가 Oracle DB에 암호화 저장되고, Spring이 AI 요청에 주입한다. 비회원은 키를 브라우저에 저장하고 요청 헤더 `X-Gemini-Api-Key`로 전달한다.
 - 또는 `.env`에 `LLM_PROVIDER=qwen`, `QWEN_BASE_URL` 등을 설정한 서버 기본 AI(LM Studio 등).
 
 ## 4. 종단 시험 (공용 DB에 **쓰기** 발생)
@@ -172,8 +172,8 @@ conn.close()
 
 ## 7. 알려진 한계 (시험 때 오류로 오해하지 말 것)
 
-- 서버 저장 Gemini 키는 **화면에서 등록할 방법이 없다**. `saveServerApiKey`(`frontend/src/api/auth.ts`)가 정의만 되어 있고 어디서도 호출되지 않는다. 지금은 브라우저에 입력한 키가 우선 사용된다. 서버 저장 키를 쓰려면 `PUT /api/users/api-key`를 직접 호출하거나 화면을 추가해야 한다.
-- 키 우선순위: 요청 헤더 키 > 서버 저장 키 > 없음(FastAPI가 서버 기본 AI 또는 401 `API_KEY_REQUIRED`).
+- 로그인 사용자는 API 키 창의 저장 버튼으로 `PUT /api/users/api-key`를 호출해 키를 계정에 저장한다. 비회원은 브라우저 저장소를 사용한다.
+- 키 우선순위: 요청에 직접 실린 키 > Spring에 암호화 저장된 계정 키(Spring이 헤더로 전달) > 서버 기본 AI 또는 401 `API_KEY_REQUIRED`.
 - 로그인 중의 대화는 브라우저(localStorage)에 복사하지 않는다(서버가 기준 저장소). 로그아웃하면 화면을 비우고, 서버에서 불러와 복사됐던 `server-…` 상담도 지운다. **이전 버전에서 로그인 중에 만들어 이미 저장된 일반 대화는 구분할 수 없어 자동으로 지우지 않는다** — 공용 PC에서는 사이드바에서 직접 삭제한다.
 - 로그인 실패 제한은 서버 메모리 기반이라 재시작하면 초기화되고, 서버를 여러 대로 늘리면 공유되지 않는다. 한도: 같은 이메일+같은 IP 5회, 같은 이메일 전체 30회, 같은 IP 전체 20회(각 10분). Vite 개발 프록시를 거치면 모든 요청이 `127.0.0.1`로 보여 IP 한도(20회)가 개발자 전체에 공유된다.
 - 프론트 mock 모드(`npm run dev` 기본)에서는 로그인·가입이 동작하지 않는다. 로그인 시험은 `VITE_USE_MOCK=false`와 Spring이 필요하다.

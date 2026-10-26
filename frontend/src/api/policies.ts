@@ -35,12 +35,10 @@ export const searchPoliciesInSession = (sessionId: string, body: SearchRequest, 
   request<SearchResponse>(
     `/ai/sessions/${encodeURIComponent(sessionId)}/search`,
     { method: "POST", body: JSON.stringify(body), headers: bearer(token) },
-    { apiKey: true },
   );
 
 export const askPolicyInSession = (sessionId: string, policyId: string, body: AskRequest, token: string) =>
   request<AskResponse>(
     `/ai/sessions/${encodeURIComponent(sessionId)}/policies/${idPath(policyId)}/ask`,
     { method: "POST", body: JSON.stringify(body), headers: bearer(token) },
-    { apiKey: true },
   );

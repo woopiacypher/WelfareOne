@@ -3,6 +3,7 @@ package com.welfareone.memberjoin.controller;
 import com.welfareone.memberjoin.dto.AuthResponse;
 import com.welfareone.memberjoin.dto.LoginRequest;
 import com.welfareone.memberjoin.dto.SignUpRequest;
+import com.welfareone.memberjoin.dto.UpdateProfileRequest;
 import com.welfareone.memberjoin.dto.UserProfileDto;
 import com.welfareone.memberjoin.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,6 +39,14 @@ public class AuthController {
     public ResponseEntity<UserProfileDto> getMe(@AuthenticationPrincipal Long userId) {
         UserProfileDto profile = authService.getProfile(userId);
         return ResponseEntity.ok(profile);
+    }
+
+    @PutMapping("/me")
+    public ResponseEntity<UserProfileDto> updateProfile(
+            @AuthenticationPrincipal Long userId,
+            @RequestBody UpdateProfileRequest request) {
+        UserProfileDto updated = authService.updateProfile(userId, request);
+        return ResponseEntity.ok(updated);
     }
 
     @PostMapping("/logout")

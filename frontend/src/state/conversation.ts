@@ -11,7 +11,7 @@ export interface CurrentPolicy {
 }
 
 export interface ConversationState {
-  phase: "start" | "chat";
+  phase: "portal" | "start" | "chat";
   // 상담 기록(localStorage) 저장·복원에 쓰는 식별자. 질문이 없는 상담은 저장하지 않는다.
   conversation_id: string | null;
   created_at: number | null;
@@ -23,7 +23,7 @@ export interface ConversationState {
 }
 
 export const initialState: ConversationState = {
-  phase: "start",
+  phase: "portal",
   conversation_id: null,
   created_at: null,
   region: null,
@@ -55,6 +55,7 @@ export const uid = (): string =>
 const opener = (): Message => ({ id: uid(), type: "ai_opener" });
 
 export type Action =
+  | { type: "SHOW_PORTAL" }
   | { type: "START"; region: RegionSelection; age: number | null }
   | { type: "EDIT_CONDITIONS" }
   | { type: "CANCEL_EDIT" }
@@ -67,6 +68,8 @@ export type Action =
 
 export function conversationReducer(state: ConversationState, action: Action): ConversationState {
   switch (action.type) {
+    case "SHOW_PORTAL":
+      return { ...initialState, phase: "portal" };
     case "START":
       // 지역·나이가 바뀌면 이전 후보와 선택 정책은 의미가 없으므로 새 상담으로 시작한다.
       // 이전 상담은 기록에 그대로 남는다(질문이 있었던 경우).

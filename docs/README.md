@@ -10,6 +10,7 @@
 | `DIRECTION_C_PLAN.md` | 자격 판정 이후 단계(서류·초안·LangGraph) 작업 계획 | 계획 초안(팀 합의 전) | 공유 |
 | `eligibility_design_draft.md` | 자격 판정 설계 초안 | 초안(팀 합의 전) | 공유 |
 | `CLEANUP_COMMITS.md` | 폴더 구조 정리 브랜치의 커밋별 변경 설명 | 리뷰용 | 공유 |
+| `ORACLE_REMOTE_SERVER_SETUP.md` | 학생 PC의 Oracle 21c XE 원격 접속과 WelfareOne 연결 | 설치·연결 가이드 | 공유 |
 | `labeling/labeling_guide.pdf` | 사람 라벨링 가이드(원본 `labeling_guide.html`) | 라벨링 작업용 | 공유 가능 |
 | `CHANGELOG_2026-10-06.md` | 2026-10-06 변경 내역 | 개인 메모 참조 포함 → 정리 후 공유 | 미추적 |
 | `HANDOFF_BRANCH.md` | 브랜치 협업 인수인계 | 개인 메모 참조 포함 → 정리 후 공유 | 미추적 |

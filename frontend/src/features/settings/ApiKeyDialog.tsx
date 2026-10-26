@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { deleteServerApiKey, getAuthToken, getServerApiKeyStatus, saveServerApiKey } from "../../api/auth";
 import { clearApiKey, loadApiKey, maskApiKey, saveApiKey, validateApiKey } from "../../utils/apiKey";
 
 interface Props {
@@ -16,9 +17,12 @@ const REASON_TEXT = {
 
 export function ApiKeyDialog({ open, reason = null, onClose, onChange }: Props) {
   const stored = open ? loadApiKey() : null;
+  const loggedIn = Boolean(getAuthToken());
   const [value, setValue] = useState("");
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [serverHasKey, setServerHasKey] = useState(false);
   const [, refresh] = useState(0); // 삭제 직후 "저장된 키" 표시를 다시 그리기 위한 값
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -27,9 +31,15 @@ export function ApiKeyDialog({ open, reason = null, onClose, onChange }: Props) 
     if (!open) return;
     setValue("");
     setError(null);
+    setServerHasKey(false);
     setRemember(loadApiKey()?.storage === "local");
     inputRef.current?.focus();
-  }, [open]);
+    if (loggedIn) {
+      getServerApiKeyStatus()
+        .then((status) => setServerHasKey(status.has_api_key))
+        .catch(() => setServerHasKey(false));
+    }
+  }, [open, loggedIn]);
 
   useEffect(() => {
     if (!open) return;
@@ -40,27 +50,51 @@ export function ApiKeyDialog({ open, reason = null, onClose, onChange }: Props) 
 
   if (!open) return null;
 
-  const save = (event: React.FormEvent) => {
+  const save = async (event: React.FormEvent) => {
     event.preventDefault();
     const problem = validateApiKey(value);
     if (problem) {
       setError(problem);
       return;
     }
-    if (!saveApiKey(value, remember ? "local" : "session")) {
-      setError("이 브라우저에서는 키를 저장할 수 없어요. 사생활 보호 모드나 저장소 차단 설정을 확인해 주세요.");
-      return;
+    setSaving(true);
+    setError(null);
+    try {
+      if (loggedIn) {
+        const result = await saveServerApiKey(value.trim());
+        clearApiKey(); // 계정에 저장한 키가 브라우저의 이전 키보다 우선하도록 정리한다.
+        setServerHasKey(result.has_api_key);
+      } else if (!saveApiKey(value, remember ? "local" : "session")) {
+        setError("이 브라우저에서는 키를 저장할 수 없어요. 사생활 보호 모드나 저장소 차단 설정을 확인해 주세요.");
+        return;
+      }
+      setValue("");
+      onChange?.();
+      onClose();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? `저장하지 못했어요: ${saveError.message}` : "API 키를 저장하지 못했어요.");
+    } finally {
+      setSaving(false);
     }
-    setValue("");
-    onChange?.();
-    onClose();
   };
 
-  const remove = () => {
-    clearApiKey();
-    setValue("");
-    refresh((n) => n + 1);
-    onChange?.();
+  const remove = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      if (loggedIn && serverHasKey) {
+        await deleteServerApiKey();
+        setServerHasKey(false);
+      }
+      clearApiKey();
+      setValue("");
+      refresh((n) => n + 1);
+      onChange?.();
+    } catch (removeError) {
+      setError(removeError instanceof Error ? `삭제하지 못했어요: ${removeError.message}` : "API 키를 삭제하지 못했어요.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -76,21 +110,26 @@ export function ApiKeyDialog({ open, reason = null, onClose, onChange }: Props) 
         <h2 id="api-key-title">Gemini API 키</h2>
         {reason && <p className="error-text" role="alert">{REASON_TEXT[reason]}</p>}
         <p className="muted">
-          본인의 Gemini API 키를 입력하면 그 키로 질문 분석과 답변 생성을 해요. 키는 이 브라우저에만 저장되고,
-          요청할 때만 서버로 전달돼요. 서버에는 저장하지 않아요.{" "}
+          본인의 Gemini API 키를 입력하면 그 키로 질문 분석과 답변 생성을 해요. {loggedIn
+            ? "로그인한 계정의 키는 암호화되어 서버 DB에 저장돼요."
+            : "키는 이 브라우저에만 저장되고, 요청할 때만 서버로 전달돼요."}{" "}
           <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">
             키 발급받기
           </a>
         </p>
 
+        {loggedIn && serverHasKey && (
+          <p className="muted" role="status">이 계정에 API 키가 저장돼 있어요. 새 키를 저장하면 교체됩니다.</p>
+        )}
+
         {stored && (
           <p className="muted" role="status">
-            저장된 키: <code>{maskApiKey(stored.key)}</code> ({stored.storage === "local" ? "이 브라우저에 유지" : "이 탭에서만"})
+            브라우저에 저장된 키: <code>{maskApiKey(stored.key)}</code> ({stored.storage === "local" ? "이 브라우저에 유지" : "이 탭에서만"})
           </p>
         )}
 
         <label className="field">
-          <span>{stored ? "새 키로 바꾸기" : "API 키"}</span>
+          <span>{stored || serverHasKey ? "새 키로 바꾸기" : "API 키"}</span>
           <input
             ref={inputRef}
             type="password"
@@ -107,23 +146,27 @@ export function ApiKeyDialog({ open, reason = null, onClose, onChange }: Props) 
           {error && <small className="field-error">{error}</small>}
         </label>
 
-        <label className="check">
-          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-          <span>이 브라우저에 기억하기 (끄면 탭을 닫을 때 삭제돼요)</span>
-        </label>
-        <small className="muted">공용 PC에서는 기억하기를 끄고, 사용 후 삭제해 주세요.</small>
+        {!loggedIn && (
+          <>
+            <label className="check">
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+              <span>이 브라우저에 기억하기 (끄면 탭을 닫을 때 삭제돼요)</span>
+            </label>
+            <small className="muted">공용 PC에서는 기억하기를 끄고, 사용 후 삭제해 주세요.</small>
+          </>
+        )}
 
         <div className="actions">
-          {stored && (
-            <button type="button" className="btn" onClick={remove}>
+          {(stored || (loggedIn && serverHasKey)) && (
+            <button type="button" className="btn" onClick={remove} disabled={saving}>
               키 삭제
             </button>
           )}
-          <button type="button" className="btn" onClick={onClose}>
+          <button type="button" className="btn" onClick={onClose} disabled={saving}>
             닫기
           </button>
-          <button type="submit" className="btn primary">
-            저장
+          <button type="submit" className="btn primary" disabled={saving}>
+            {saving ? "저장 중…" : "저장"}
           </button>
         </div>
       </form>

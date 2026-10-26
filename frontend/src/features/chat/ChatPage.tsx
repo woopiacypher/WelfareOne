@@ -73,9 +73,9 @@ export function ChatPage({ state, dispatch, history }: Props) {
     setAuthModalOpen(showAuthModal);
   };
 
-  // 기록 서버가 안 되어도 검색은 계속되도록 실패하면 null을 돌려준다(그 경우 기존처럼 FastAPI로 바로 보낸다).
+  // 게스트는 세션 서버를 거치지 않는다. 로그인 요청은 저장된 계정 키를 쓰도록 세션을 만든다.
   const ensureServerSession = async (firstQuestion: string): Promise<string | null> => {
-    if (USE_MOCK || !user || !region || !getAuthToken()) return null;
+    if (USE_MOCK || !region || !getAuthToken()) return null;
     if (activeSessionId) return activeSessionId;
     try {
       const created = await createServerSession({
@@ -92,17 +92,16 @@ export function ChatPage({ state, dispatch, history }: Props) {
     }
   };
 
-  // 기록 서버 세션 오류만 FastAPI 직접 호출로 재시도한다. 인증 오류는 별도로 로그아웃 처리한다.
+  // 로그인 요청은 Spring을 통해야 DB의 계정 키를 사용하므로 세션 오류를 FastAPI 직접 호출로 우회하지 않는다.
   // SESSION_NOT_FOUND / FORBIDDEN이면 세션 연결을 끊고 다음 질문에서 새로 만든다.
   // 키 오류(API_KEY_REQUIRED, INVALID_API_KEY)나 한도 초과는 FastAPI가 준 오류이므로 그대로 보여 준다.
-  const viaServer = async <T,>(run: () => Promise<T>, direct: () => Promise<T>): Promise<T> => {
+  const viaServer = async <T,>(run: () => Promise<T>): Promise<T> => {
     try {
       return await run();
     } catch (error) {
       if (error instanceof ApiClientError) {
         if (error.code === "SESSION_NOT_FOUND" || error.code === "FORBIDDEN") {
           setServerSession(null);
-          return direct();
         }
       }
       throw error;
@@ -113,8 +112,13 @@ export function ChatPage({ state, dispatch, history }: Props) {
     if (!region || pending) return;
     dispatch({ type: "USER_SEND", text });
     try {
-      const sessionId = await ensureServerSession(text);
       const token = getAuthToken();
+      const sessionId = await ensureServerSession(text);
+      // 로그인 계정 키는 Spring이 Oracle에서 복호화해 FastAPI로 전달하므로
+      // 회원 요청을 브라우저 키가 없는 FastAPI 직접 경로로 보내지 않는다.
+      if (!USE_MOCK && token && sessionId === null) {
+        throw new ApiClientError("NETWORK_ERROR", "계정 저장 키를 사용할 AI 서버에 연결하지 못했습니다.");
+      }
       const server = sessionId !== null && token !== null ? { sessionId, token } : null;
       if (current_policy) {
         const askBody = {
@@ -124,7 +128,7 @@ export function ChatPage({ state, dispatch, history }: Props) {
         };
         const policyId = current_policy.policy_id;
         const res = server
-          ? await viaServer(() => askPolicyInSession(server.sessionId, policyId, askBody, server.token), () => askPolicy(policyId, askBody))
+          ? await viaServer(() => askPolicyInSession(server.sessionId, policyId, askBody, server.token))
           : await askPolicy(policyId, askBody);
         if (res.route !== "current_policy_question" || !res.answer) {
           dispatch({ type: "RESOLVE", message: { id: uid(), type: "ai_notice", code: "NOT_CURRENT_POLICY" } });
@@ -134,7 +138,7 @@ export function ChatPage({ state, dispatch, history }: Props) {
       } else {
         const searchBody = { question: text, region, age };
         const res = server
-          ? await viaServer(() => searchPoliciesInSession(server.sessionId, searchBody, server.token), () => searchPolicies(searchBody))
+          ? await viaServer(() => searchPoliciesInSession(server.sessionId, searchBody, server.token))
           : await searchPolicies(searchBody);
         dispatch({
           type: "RESOLVE",
@@ -330,7 +334,10 @@ export function ChatPage({ state, dispatch, history }: Props) {
         open={keyDialog.open}
         reason={keyDialog.reason}
         onClose={() => setKeyDialog({ open: false, reason: null })}
-        onChange={() => setKeyVersion((v) => v + 1)}
+        onChange={() => {
+          setKeyVersion((v) => v + 1);
+          if (getAuthToken()) getMe().then(setUser);
+        }}
       />
 
       {/* 공통 로그인/회원가입/비회원 시작 2단 모달 */}

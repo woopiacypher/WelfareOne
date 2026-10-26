@@ -30,7 +30,7 @@
 
 2. 벡터 DB(`data/chroma`)를 받아 이 폴더에 둡니다. DB는 용량이 커서 Git에 없습니다.
 3. 임베딩 모델(`Qwen/Qwen3-Embedding-0.6B`)이 Hugging Face 캐시에 있어야 합니다(`local_files_only`로 읽습니다).
-4. Gemini API 키는 **웹 화면의 "API 키" 입력창**에 본인 키를 넣어 씁니다(BYOK). 키는 브라우저에만 저장되고 요청마다 헤더(`X-Gemini-Api-Key`)로 전달됩니다.
+4. Gemini API 키는 **웹 화면의 "API 키" 입력창**에 본인 키를 넣어 씁니다(BYOK). 로그인 사용자는 계정별로 Oracle DB에 암호화 저장되고, 비회원은 브라우저에 저장됩니다. AI 요청 시에는 `X-Gemini-Api-Key` 헤더로 전달됩니다.
 
 ## 실행
 

@@ -29,7 +29,7 @@ API_KEY_REQUIRED   사용자 키가 없고 서버 키 폴백도 꺼진 경우
 INVALID_API_KEY    키 형식이 틀렸거나 Gemini가 거부한 경우(401/403, 또는 400 + "API key" 메시지)
 ```
 
-- 서버 키 폴백은 환경변수 `WELFAREONE_ALLOW_SERVER_KEY=true`일 때만 동작(기본 꺼짐). 서버는 사용자 키를 저장·로깅하지 않는다.
+- 서버 키 폴백은 환경변수 `WELFAREONE_ALLOW_SERVER_KEY=true`일 때만 동작(기본 꺼짐). 로그인 사용자의 키는 Spring이 AES-GCM으로 암호화해 Oracle `USER_API_KEYS`에 저장하고, 평문을 로그에 남기지 않는다. 비회원 키는 브라우저에 저장된다. FastAPI는 키를 저장하지 않는다.
 - 오류 코드 목록(`INVALID_REQUEST` … `INTERNAL_ERROR`)에 위 두 개를 추가하고, 프론트 `ApiErrorCode`(`src/types/contract.ts`)와 맞춘다(이미 반영됨).
 
 ## 3. 8장 질문 분석 — 시그니처
@@ -110,7 +110,7 @@ INVALID_API_KEY    키 형식이 틀렸거나 Gemini가 거부한 경우(401/403
 - 1번이 가장 높다. 사용자가 키를 보냈는데 서버 Qwen으로 처리하거나, 반대로 사용자 키가 Qwen으로 전달되는 일은 없어야 한다(테스트로 고정).
 - 형식이 틀린 키는 2~3번으로 넘어가지 않고 401 `INVALID_API_KEY`다(기존 동작 유지).
 - 한 요청 안에서 공급자를 섞지 않는다. 질문 분석, 관련도 판정, 답변은 같은 공급자를 쓴다.
-- 서버는 사용자 키를 저장·로깅하지 않고 요청 처리 중에만 사용한다(기존 규칙 유지).
+- 로그인 계정의 사용자 키는 Spring이 암호화 저장하고, FastAPI는 전달받은 요청에서만 사용하며 저장·로깅하지 않는다.
 
 ### 8-2. 오류 코드
 

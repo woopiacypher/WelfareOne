@@ -81,10 +81,44 @@ export async function getMe(): Promise<UserProfile | null> {
 
 export async function saveServerApiKey(apiKey: string): Promise<{ has_api_key: boolean }> {
   const token = getAuthToken();
+  if (!token) throw new Error("로그인 후 API 키를 저장할 수 있어요.");
   return await request<{ has_api_key: boolean }>("/users/api-key", {
     method: "PUT",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: { Authorization: `Bearer ${token}` },
     body: JSON.stringify({ api_key: apiKey }),
   });
 }
+
+export async function getServerApiKeyStatus(): Promise<{ has_api_key: boolean }> {
+  const token = getAuthToken();
+  if (!token) throw new Error("로그인이 필요해요.");
+  return await request<{ has_api_key: boolean }>("/users/api-key/status", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function deleteServerApiKey(): Promise<void> {
+  const token = getAuthToken();
+  if (!token) throw new Error("로그인이 필요해요.");
+  await request<{ message: string }>("/users/api-key", {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export interface UpdateProfileData {
+  default_region_level1?: string;
+  default_region_level2?: string;
+  default_age?: number | null;
+}
+
+export async function updateProfile(data: UpdateProfileData): Promise<UserProfile> {
+  const token = getAuthToken();
+  return await request<UserProfile>("/auth/me", {
+    method: "PUT",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: JSON.stringify(data),
+  });
+}
+
 

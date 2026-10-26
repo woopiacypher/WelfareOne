@@ -1,6 +1,6 @@
 # WelfareOne 인증, API키 관리 및 사이드바 히스토리 연동 구현 계획
 
-본 문서는 **Java 17** 기반의 **Spring Boot 3.2.4**와 **Oracle DB**를 도입하여 **회원가입, 로그인(JWT), Gemini API 키 암호화 저장, 좌측 사이드바(aside) 동적 히스토리 및 사용자 프로필 연동**, 그리고 기존 **FastAPI(Python AI 파이프라인)**와의 연동을 구현하기 위한 종합 설계 및 단계별 실행 계획입니다.
+본 문서는 **Java 21** 기반의 **Spring Boot 3.2.4**와 **Oracle DB**를 도입하여 **회원가입, 로그인(JWT), Gemini API 키 암호화 저장, 좌측 사이드바(aside) 동적 히스토리 및 사용자 프로필 연동**, 그리고 기존 **FastAPI(Python AI 파이프라인)**와의 연동을 구현하기 위한 종합 설계 및 단계별 실행 계획입니다.
 
 > **참조 문서 (Context)**: [`docs/function_contracts.md`](file:///c:/work/WelfareOne/docs/function_contracts.md)의 공통 데이터 명명 규칙(snake_case, `policy_id`, `route`, `intents` 등)과 API 응답 규격을 준수합니다.
 
@@ -19,7 +19,7 @@ flowchart LR
         UI_AuthModal["공통 로그인/가입 포털\n(공공데이터포털 2단 스타일)"]
     end
 
-    subgraph SpringBoot ["Spring Boot (Java 17 / Spring Boot 3.2.4 / Port 8080)"]
+    subgraph SpringBoot ["Spring Boot (Java 21 / Spring Boot 3.2.4 / Port 8080)"]
         Security["Spring Security + JWT"]
         UserSvc["회원 & 프로필 관리"]
         KeySvc["API 키 암호화/복호화 (AES-256)"]
@@ -300,7 +300,7 @@ stateDiagram-v2
 ## 7. 단계별 상세 구현 로드맵
 
 ### Phase 1: Spring Boot 프로젝트 및 Oracle DB 연동 세팅 (MyBatis)
-- [ ] Spring Boot 3.2.4 (Java 17) 프로젝트 세팅 (Spring Web, Security, MyBatis `3.0.3`, Oracle Driver `ojdbc11`, Lombok, JJWT)
+- [ ] Spring Boot 3.2.4 (Java 21) 프로젝트 세팅 (Spring Web, Security, MyBatis `3.0.3`, Oracle Driver `ojdbc11`, Lombok, JJWT)
 - [ ] `application.yml`에 Oracle DB 연결 정보 및 MyBatis 매퍼 경로 설정
 - [ ] Oracle DDL([`docs/oracle_schema.sql`](file:///c:/work/WelfareOne/docs/oracle_schema.sql)) 실행 및 테이블 생성
 - [ ] 도메인 모델(`domain/`) 및 MyBatis 매퍼 인터페이스/XML 작성
@@ -348,13 +348,13 @@ stateDiagram-v2
 
 ## 9. Spring Boot 백엔드 (`app/memberJoin/`) 모듈 및 파일 구조 계획
 
-회원가입, 로그인(JWT), Gemini API 키 암호화 보관, 대화 히스토리 영속화는 **Java 17** 기반의 **Spring Boot 3.2.4 (Gradle)**와 **MyBatis 3.0.3** SQL 매퍼를 사용하여 **`app/memberJoin/`** 폴더에 구축됩니다.
+회원가입, 로그인(JWT), Gemini API 키 암호화 보관, 대화 히스토리 영속화는 **Java 21** 기반의 **Spring Boot 3.2.4 (Gradle)**와 **MyBatis 3.0.3** SQL 매퍼를 사용하여 **`app/memberJoin/`** 폴더에 구축됩니다.
 
 ### 9.1. `app/memberJoin/` 프로젝트 디렉토리 및 패키지 구조
 
 ```text
 app/memberJoin/
-├── build.gradle                              # Gradle 빌드 스크립트 (Spring Boot 3.2.4, Java 17, MyBatis, Oracle, JJWT)
+├── build.gradle                              # Gradle 빌드 스크립트 (Spring Boot 3.2.4, Java 21, MyBatis, Oracle, JJWT)
 ├── settings.gradle                           # 프로젝트명 (memberJoin)
 └── src/
     ├── main/
@@ -447,6 +447,5 @@ sequenceDiagram
     MyBatis->>Oracle: CHAT_SESSIONS updated_at 갱신 (사이드바 최신화)
     Spring-->>User: 결과 응답 (사이드바 '이전' 목록 자동 반영)
 ```
-
 
 

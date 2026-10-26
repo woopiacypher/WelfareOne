@@ -67,5 +67,14 @@
         WHERE email = #{email}
     </select>
 
+    <update id="updateProfile">
+        UPDATE USERS
+        SET default_region_level1 = #{defaultRegionLevel1, jdbcType=VARCHAR},
+            default_region_level2 = #{defaultRegionLevel2, jdbcType=VARCHAR},
+            default_age = #{defaultAge, jdbcType=INTEGER},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = #{userId}
+    </update>
+
 </mapper>
 

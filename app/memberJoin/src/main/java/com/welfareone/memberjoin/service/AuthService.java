@@ -5,6 +5,7 @@ import com.welfareone.memberjoin.domain.UserApiKey;
 import com.welfareone.memberjoin.dto.AuthResponse;
 import com.welfareone.memberjoin.dto.LoginRequest;
 import com.welfareone.memberjoin.dto.SignUpRequest;
+import com.welfareone.memberjoin.dto.UpdateProfileRequest;
 import com.welfareone.memberjoin.dto.UserProfileDto;
 import com.welfareone.memberjoin.exception.ApiException;
 import com.welfareone.memberjoin.mapper.UserApiKeyMapper;
@@ -110,6 +111,26 @@ public class AuthService {
                 .defaultAge(user.getDefaultAge())
                 .hasApiKey(key != null)
                 .build();
+    }
+
+    @Transactional
+    public UserProfileDto updateProfile(Long userId, UpdateProfileRequest request) {
+        if (userId == null) {
+            throw ApiException.unauthorized();
+        }
+        User user = userMapper.findById(userId);
+        if (user == null) {
+            throw ApiException.unauthorized();
+        }
+
+        userMapper.updateProfile(
+                userId,
+                request.getDefaultRegionLevel1(),
+                request.getDefaultRegionLevel2(),
+                request.getDefaultAge()
+        );
+
+        return getProfile(userId);
     }
 }
 
