@@ -4,6 +4,7 @@ import { ERROR_MESSAGES, SERVICE_NAME, DISCLAIMER } from "../../constants/text";
 import { toErrorCode } from "../../api/client";
 import type { AppErrorCode, RegionSelection, Regions } from "../../types/contract";
 import { getServerConfig } from "../../api/config";
+import { getAuthToken, getServerApiKeyStatus } from "../../api/auth";
 import { loadApiKey } from "../../utils/apiKey";
 import { ApiKeyDialog } from "../settings/ApiKeyDialog";
 import { ThemeToggle } from "../settings/ThemeToggle";
@@ -40,10 +41,23 @@ export function StartForm({ initialRegion, initialAge, onSubmit, onCancel }: Pro
   const [ageError, setAgeError] = useState<string | null>(null);
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   const [keyVersion, setKeyVersion] = useState(0);
+  const [serverHasKey, setServerHasKey] = useState(false);
   // 저장소 값은 keyVersion이 바뀔 때(저장·삭제 후)만 다시 읽는다
-  const hasKey = useMemo(() => loadApiKey() !== null, [keyVersion]);
+  const hasKey = useMemo(() => loadApiKey() !== null || serverHasKey, [keyVersion, serverHasKey]);
   // 서버가 키 없이도 AI를 처리하면 키 입력은 선택 사항이다. 조회에 실패하면 기존처럼 필수로 안내한다.
   const [serverLlm, setServerLlm] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (getAuthToken()) {
+      getServerApiKeyStatus()
+        .then((status) => !cancelled && setServerHasKey(status.has_api_key))
+        .catch(() => {});
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     getServerConfig()
@@ -149,7 +163,14 @@ export function StartForm({ initialRegion, initialAge, onSubmit, onCancel }: Pro
       <ApiKeyDialog
         open={keyDialogOpen}
         onClose={() => setKeyDialogOpen(false)}
-        onChange={() => setKeyVersion((v) => v + 1)}
+        onChange={() => {
+          setKeyVersion((v) => v + 1);
+          if (getAuthToken()) {
+            getServerApiKeyStatus().then((status) => setServerHasKey(status.has_api_key)).catch(() => {});
+          } else {
+            setServerHasKey(false);
+          }
+        }}
       />
     </main>
   );

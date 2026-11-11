@@ -16,8 +16,9 @@ import { ConversationList } from "./ConversationList";
 import { CurrentPolicyBar } from "./CurrentPolicyBar";
 import { MessageList } from "./MessageList";
 import { getAuthToken, getMe, removeAuthToken, UserProfile } from "../../api/auth";
-import { createServerSession, fetchServerSessions, fetchServerSessionDetail, ServerSessionSummary } from "../../api/history";
+import { createServerSession, deleteServerSession, fetchServerSessions, fetchServerSessionDetail, renameServerSession, ServerSessionSummary } from "../../api/history";
 import { CommonLoginModal } from "../portal/CommonLoginModal";
+import { ServerConversationList } from "./ServerConversationList";
 
 interface Props {
   state: ConversationState;
@@ -62,9 +63,20 @@ export function ChatPage({ state, dispatch, history }: Props) {
   const activeSessionId =
     serverSession && serverSession.conversationId === (state.conversation_id ?? "") ? serverSession.sessionId : null;
 
-  // 기록 서버가 안 되어도 검색은 계속되도록 실패하면 null을 돌려준다(그 경우 기존처럼 FastAPI로 바로 보낸다).
+  const clearAuthenticatedState = (showAuthModal: boolean) => {
+    removeAuthToken();
+    setUser(null);
+    setServerSessions([]);
+    setActiveServerSessionId(null);
+    setServerSession(null);
+    history.purgeServerCopies();
+    dispatch({ type: "NEW_CHAT" });
+    setAuthModalOpen(showAuthModal);
+  };
+
+  // 게스트는 세션 서버를 거치지 않는다. 로그인 요청은 저장된 계정 키를 쓰도록 세션을 만든다.
   const ensureServerSession = async (firstQuestion: string): Promise<string | null> => {
-    if (USE_MOCK || !user || !region || !getAuthToken()) return null;
+    if (USE_MOCK || !region || !getAuthToken()) return null;
     if (activeSessionId) return activeSessionId;
     try {
       const created = await createServerSession({
@@ -75,29 +87,22 @@ export function ChatPage({ state, dispatch, history }: Props) {
       });
       setServerSession({ conversationId: state.conversation_id ?? "", sessionId: created.session_id });
       return created.session_id;
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiClientError && error.code === "UNAUTHORIZED") throw error;
       return null;
     }
   };
 
-  // 기록 서버 경로로 보냈다가 서버 쪽 사유로 거절되면 FastAPI 직접 호출로 한 번 더 보낸다(기록만 건너뛰고 검색은 계속된다).
-  // - UNAUTHORIZED: 로그인 토큰이 만료·거부됨 → 로그아웃 처리
-  // - SESSION_NOT_FOUND / FORBIDDEN: 기록 서버의 상담 세션을 쓸 수 없음 → 세션 연결을 끊고 다음 질문에서 새로 만든다
+  // 로그인 요청은 Spring을 통해야 DB의 계정 키를 사용하므로 세션 오류를 FastAPI 직접 호출로 우회하지 않는다.
+  // SESSION_NOT_FOUND / FORBIDDEN이면 세션 연결을 끊고 다음 질문에서 새로 만든다.
   // 키 오류(API_KEY_REQUIRED, INVALID_API_KEY)나 한도 초과는 FastAPI가 준 오류이므로 그대로 보여 준다.
-  const viaServer = async <T,>(run: () => Promise<T>, direct: () => Promise<T>): Promise<T> => {
+  const viaServer = async <T,>(run: () => Promise<T>): Promise<T> => {
     try {
       return await run();
     } catch (error) {
       if (error instanceof ApiClientError) {
-        if (error.code === "UNAUTHORIZED") {
-          removeAuthToken();
-          setUser(null);
-          setServerSession(null);
-          return direct();
-        }
         if (error.code === "SESSION_NOT_FOUND" || error.code === "FORBIDDEN") {
           setServerSession(null);
-          return direct();
         }
       }
       throw error;
@@ -108,8 +113,13 @@ export function ChatPage({ state, dispatch, history }: Props) {
     if (!region || pending) return;
     dispatch({ type: "USER_SEND", text });
     try {
-      const sessionId = await ensureServerSession(text);
       const token = getAuthToken();
+      const sessionId = await ensureServerSession(text);
+      // 로그인 계정 키는 Spring이 Oracle에서 복호화해 FastAPI로 전달하므로
+      // 회원 요청을 브라우저 키가 없는 FastAPI 직접 경로로 보내지 않는다.
+      if (!USE_MOCK && token && sessionId === null) {
+        throw new ApiClientError("NETWORK_ERROR", "계정 저장 키를 사용할 AI 서버에 연결하지 못했습니다.");
+      }
       const server = sessionId !== null && token !== null ? { sessionId, token } : null;
       if (current_policy) {
         const askBody = {
@@ -119,7 +129,7 @@ export function ChatPage({ state, dispatch, history }: Props) {
         };
         const policyId = current_policy.policy_id;
         const res = server
-          ? await viaServer(() => askPolicyInSession(server.sessionId, policyId, askBody, server.token), () => askPolicy(policyId, askBody))
+          ? await viaServer(() => askPolicyInSession(server.sessionId, policyId, askBody, server.token))
           : await askPolicy(policyId, askBody);
         if (res.route !== "current_policy_question" || !res.answer) {
           dispatch({ type: "RESOLVE", message: { id: uid(), type: "ai_notice", code: "NOT_CURRENT_POLICY" } });
@@ -129,7 +139,7 @@ export function ChatPage({ state, dispatch, history }: Props) {
       } else {
         const searchBody = { question: text, region, age };
         const res = server
-          ? await viaServer(() => searchPoliciesInSession(server.sessionId, searchBody, server.token), () => searchPolicies(searchBody))
+          ? await viaServer(() => searchPoliciesInSession(server.sessionId, searchBody, server.token))
           : await searchPolicies(searchBody);
         dispatch({
           type: "RESOLVE",
@@ -147,6 +157,10 @@ export function ChatPage({ state, dispatch, history }: Props) {
       refreshSessions();
     } catch (error) {
       const code = toErrorCode(error);
+      if (code === "UNAUTHORIZED") {
+        clearAuthenticatedState(true);
+        return;
+      }
       dispatch({ type: "RESOLVE", message: { id: uid(), type: "ai_error", code } });
       if (code === "API_KEY_REQUIRED") setKeyDialog({ open: true, reason: "required" });
       if (code === "INVALID_API_KEY") setKeyDialog({ open: true, reason: "invalid" });
@@ -167,16 +181,25 @@ export function ChatPage({ state, dispatch, history }: Props) {
     }
   };
 
+  const handleRenameServerSession = async (sessionId: string, title: string) => {
+    await renameServerSession(sessionId, title.trim());
+    await fetchServerSessions().then(setServerSessions);
+  };
+
+  const handleDeleteServerSession = async (sessionId: string) => {
+    await deleteServerSession(sessionId);
+    setServerSessions((sessions) => sessions.filter((session) => session.session_id !== sessionId));
+    if (sessionId === activeServerSessionId) {
+      setActiveServerSessionId(null);
+      setServerSession(null);
+      dispatch({ type: "NEW_CHAT" });
+    }
+  };
+
   // 로그아웃: 서버(Oracle)에서 불러온 대화가 다음 사용자에게 보이지 않도록 화면과 브라우저의 복사본을 비운다.
   // 게스트가 직접 만든 상담 기록은 건드리지 않는다.
   const handleLogout = () => {
-    removeAuthToken();
-    setUser(null);
-    setServerSessions([]);
-    setActiveServerSessionId(null);
-    setServerSession(null);
-    history.purgeServerCopies();
-    dispatch({ type: "NEW_CHAT" });
+    clearAuthenticatedState(false);
   };
 
   const regionLabel = region ? [region.level1, region.level2].filter(Boolean).join(" ") : "";
@@ -215,35 +238,14 @@ export function ChatPage({ state, dispatch, history }: Props) {
         {!user ? (
           <ConversationList history={history} disabled={pending} onSelected={() => setSidebarOpen(false)} />
         ) : (
-          <nav className="history" aria-label="클라우드 상담 기록">
-            <h2 className="history-heading">저장된 대화 기록 (Oracle DB)</h2>
-            {serverSessions.length === 0 ? (
-              <p className="muted history-empty">저장된 상담 기록이 없습니다.</p>
-            ) : (
-              <ul className="history-list">
-                {serverSessions.map((s) => {
-                  const active = s.session_id === activeServerSessionId;
-                  return (
-                    <li key={s.session_id} className={`history-item${active ? " active" : ""}`}>
-                      <button
-                        type="button"
-                        className="history-open"
-                        disabled={pending}
-                        title={s.title}
-                        onClick={() => handleSelectServerSession(s.session_id)}
-                      >
-                        <span className="history-title">{s.title}</span>
-                        <span className="history-meta">
-                          {s.region_level1} {s.region_level2}
-                          {s.age === null ? "" : ` · ${s.age}세`}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </nav>
+          <ServerConversationList
+            sessions={serverSessions}
+            activeId={activeServerSessionId}
+            disabled={pending}
+            onSelect={handleSelectServerSession}
+            onRename={handleRenameServerSession}
+            onDelete={handleDeleteServerSession}
+          />
         )}
 
         {/* 사이드바 하단: 비로그인(로그인/가입 버튼) vs 로그인(클라우드 보관 배너) */}
@@ -327,7 +329,10 @@ export function ChatPage({ state, dispatch, history }: Props) {
         open={keyDialog.open}
         reason={keyDialog.reason}
         onClose={() => setKeyDialog({ open: false, reason: null })}
-        onChange={() => setKeyVersion((v) => v + 1)}
+        onChange={() => {
+          setKeyVersion((v) => v + 1);
+          if (getAuthToken()) getMe().then(setUser);
+        }}
       />
 
       {/* 공통 로그인/회원가입/비회원 시작 2단 모달 */}

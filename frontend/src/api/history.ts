@@ -67,3 +67,12 @@ export async function deleteServerSession(sessionId: string): Promise<void> {
   });
 }
 
+export async function renameServerSession(sessionId: string, title: string): Promise<void> {
+  const token = getAuthToken();
+  await request(`/history/sessions/${sessionId}/title`, {
+    method: "PATCH",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: JSON.stringify({ title }),
+  });
+}
+

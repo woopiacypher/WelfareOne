@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000" role="img" aria-labelledby="title desc">
+  <title id="title">WelfareOne 시스템 구성 및 검색 AI 처리 흐름</title>
+  <desc id="desc">사용자 화면, 회원 기록 서버, 검색 AI 서버, 데이터 모델 구성과 ChromaDB 벡터 검색, BGE 크로스 인코더 리랭킹, LLM 답변 생성의 3단계 검색 흐름을 표시한다.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#28677c"/></marker>
+    <style>
+      text { font-family: "Malgun Gothic", "맑은 고딕", Arial, sans-serif; fill: #17313d; }
+      .title { font-size: 24px; font-weight: 700; }
+      .section { font-size: 20px; font-weight: 700; fill: #15566b; }
+      .sub { font-size: 13px; fill: #58717b; }
+      .cardTitle { font-size: 16px; font-weight: 700; fill: #15566b; }
+      .body { font-size: 13px; }
+      .small { font-size: 11px; fill: #506770; }
+      .stepNo { font-size: 14px; font-weight: 700; fill: white; }
+      .band { fill: #eef7f8; stroke: #89b8c5; stroke-width: 1.4; }
+      .card { fill: #fff; stroke: #9bbbc4; stroke-width: 1.1; }
+      .flow { fill: none; stroke: #28677c; stroke-width: 2; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="800" height="1000" fill="#fff"/>
+  <text x="34" y="42" class="title">02  시스템 구성 및 핵심 기능</text>
+  <text x="35" y="64" class="sub">사용자 질문이 정책 후보 검색과 정밀 재정렬을 거쳐 답변으로 이어지는 구조</text>
+
+  <!-- 사용자 화면 -->
+  <rect x="34" y="82" width="732" height="150" rx="14" class="band"/>
+  <text x="52" y="111" class="section">사용자 화면</text>
+  <text x="52" y="131" class="sub">React · TypeScript · Vite</text>
+  <rect x="52" y="146" width="335" height="66" rx="9" class="card"/>
+  <text x="68" y="170" class="cardTitle">조건 입력 · 후보 탐색</text>
+  <text x="68" y="191" class="body">지역 · 나이 · 자연어 질문 입력, 정책 후보 확인</text>
+  <rect x="405" y="146" width="343" height="66" rx="9" class="card"/>
+  <text x="421" y="170" class="cardTitle">정책 선택 · 상담</text>
+  <text x="421" y="191" class="body">빠른 질문 확인, 정책 원문 근거 답변</text>
+
+  <path d="M400 234 L400 258" class="flow"/>
+  <text x="414" y="250" class="small">로그인 · JWT</text>
+
+  <!-- 회원/기록 서버 -->
+  <rect x="34" y="264" width="732" height="142" rx="14" class="band"/>
+  <text x="52" y="293" class="section">회원 · 기록 서버</text>
+  <text x="52" y="313" class="sub">Spring Boot · Java 17 · MyBatis · Oracle</text>
+  <rect x="52" y="328" width="335" height="60" rx="9" class="card"/>
+  <text x="68" y="352" class="cardTitle">인증 · 요청 중계</text>
+  <text x="68" y="373" class="body">JWT 인증 · 세션 관리 · AI 요청 중계</text>
+  <rect x="405" y="328" width="343" height="60" rx="9" class="card"/>
+  <text x="421" y="352" class="cardTitle">Oracle 저장 · 복원</text>
+  <text x="421" y="373" class="body">회원 · 상담 기록 · 키 암호화 관리</text>
+
+  <path d="M400 408 L400 432" class="flow"/>
+  <text x="414" y="425" class="small">검색문 조회 · AI 호출</text>
+
+  <!-- 검색 AI 서버 -->
+  <rect x="34" y="438" width="732" height="310" rx="14" class="band"/>
+  <text x="52" y="468" class="section">검색 · AI 서버</text>
+  <text x="52" y="488" class="sub">Python · FastAPI · 검색·답변 구성안</text>
+
+  <!-- Three pipeline stages -->
+  <rect x="52" y="505" width="214" height="148" rx="10" class="card"/>
+  <circle cx="75" cy="530" r="14" fill="#28677c"/><text x="75" y="535" text-anchor="middle" class="stepNo">1</text>
+  <text x="98" y="535" class="cardTitle">벡터 검색</text>
+  <text x="68" y="564" class="body">ChromaDB · 바이 인코더</text>
+  <text x="68" y="587" class="small">질문과 정책을 임베딩으로 비교</text>
+  <text x="68" y="606" class="small">수만 개 정책에서 관련 후보</text>
+  <text x="68" y="625" class="small">약 30~60개를 빠르게 추림</text>
+
+  <path d="M268 579 L286 579" class="flow"/>
+
+  <rect x="292" y="505" width="214" height="148" rx="10" class="card"/>
+  <circle cx="315" cy="530" r="14" fill="#28677c"/><text x="315" y="535" text-anchor="middle" class="stepNo">2</text>
+  <text x="338" y="535" class="cardTitle">정밀 재정렬</text>
+  <text x="308" y="564" class="body">RerankerService</text>
+  <text x="308" y="587" class="small">크로스 인코더</text>
+  <text x="308" y="606" class="small">bge-reranker-v2-m3</text>
+  <text x="308" y="625" class="small">질문·후보를 함께 대조해 순위화</text>
+
+  <path d="M508 579 L526 579" class="flow"/>
+
+  <rect x="532" y="505" width="216" height="148" rx="10" class="card"/>
+  <circle cx="555" cy="530" r="14" fill="#28677c"/><text x="555" y="535" text-anchor="middle" class="stepNo">3</text>
+  <text x="578" y="535" class="cardTitle">LLM 최종 답변</text>
+  <text x="548" y="564" class="body">상위 정책을 근거로 판정</text>
+  <text x="548" y="587" class="small">관련성이 높은 정책 중심으로</text>
+  <text x="548" y="606" class="small">질문 의도와 원문을 확인해</text>
+  <text x="548" y="625" class="small">최종 답변 및 근거를 생성</text>
+
+  <rect x="52" y="671" width="696" height="56" rx="9" fill="#e4f1f4" stroke="#89b8c5"/>
+  <text x="68" y="694" class="cardTitle">정책 선택 · 답변 구성</text>
+  <text x="68" y="714" class="body">정책 ID와 원문을 연결하고, 상위 후보를 바탕으로 근거 중심 답변 제공</text>
+
+  <path d="M400 750 L400 774" class="flow"/>
+  <text x="414" y="767" class="small">검색 데이터 · 모델</text>
+
+  <!-- Data and models -->
+  <rect x="34" y="780" width="732" height="178" rx="14" class="band"/>
+  <text x="52" y="809" class="section">데이터 · 모델</text>
+  <text x="52" y="829" class="sub">복지로 공개 API → 정책 데이터 · 메타데이터 → 검색·답변</text>
+  <rect x="52" y="845" width="214" height="94" rx="9" class="card"/>
+  <text x="68" y="870" class="cardTitle">ChromaDB</text>
+  <text x="68" y="891" class="small">정책 원문·임베딩 저장</text>
+  <text x="68" y="910" class="small">벡터 후보 검색</text>
+  <rect x="292" y="845" width="214" height="94" rx="9" class="card"/>
+  <text x="308" y="870" class="cardTitle">임베딩 모델</text>
+  <text x="308" y="891" class="small">Qwen3-Embedding-0.6B</text>
+  <text x="308" y="910" class="small">질문 → 벡터 변환</text>
+  <rect x="532" y="845" width="216" height="94" rx="9" class="card"/>
+  <text x="548" y="870" class="cardTitle">Reranker · LLM</text>
+  <text x="548" y="891" class="small">BGE reranker · Gemini</text>
+  <text x="548" y="910" class="small">재정렬 · 판정 · 답변 생성</text>
+
+  <text x="400" y="982" text-anchor="middle" class="small">※ BGE 리랭커 단계는 요청하신 검색 흐름을 반영한 구성안입니다.</text>
+</svg>
